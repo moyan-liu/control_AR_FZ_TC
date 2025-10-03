@@ -1,4 +1,4 @@
-# Atmospheric River, Frontal Zone, and Tropical Cyclone Control Analysis
+# Atmospheric River, Freeze, and Tropical Cyclone Control Analysis
 
 This repository contains code and analysis for understanding and controlling atmospheric phenomena using Lagrangian coherent structures (LCS), finite-time Lyapunov exponents (FTLE), and atmospheric river detection.
 
