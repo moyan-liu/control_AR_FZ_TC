@@ -1,0 +1,42 @@
+# Large data files
+*.nc
+*.grib
+*.grb
+*.h5
+*.hdf5
+
+# Checkpoint files
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Output files
+*.png
+*.jpg
+*.gif
+*.mp4
+*.avi
+
+# Temporary files
+*.tmp
+*.bak
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Specific directories to ignore
+data/era5_batch/*.nc
+data/*.nc
+*.npy
