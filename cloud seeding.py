@@ -19,20 +19,6 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
 
 def create_seeding_mask(seeding_locations, lat_grid, lon_grid):
-  """
-  Create a combined 2D mask from multiple circular seeding regions.
-  
-  Args:
-      seeding_locations: list of dicts with keys:
-          - 'lat_center': latitude in degrees
-          - 'lon_center': longitude in degrees (0-360 or -180 to 180)
-          - 'radius_km': radius in kilometers
-      lat_grid: 2D array [lat, lon] or 1D array [lat] (can be torch tensor or numpy)
-      lon_grid: 2D array [lat, lon] or 1D array [lon] (can be torch tensor or numpy)
-  
-  Returns:
-      mask: 2D boolean numpy array [lat, lon], True where seeding should occur
-  """
   # Convert torch tensors to numpy if needed
   if torch.is_tensor(lat_grid):
       lat_grid = lat_grid.cpu().numpy()
@@ -185,9 +171,7 @@ def apply_physically_consistent_cloud_seeding(batch, seeding_mask_spatial, seedi
           )
       # ========== LATENT HEAT RELEASE ==========
       # CRITICAL: Vapor → ice is DEPOSITION, not freezing!
-      # - Freezing (liquid → ice): releases L_f = 0.334 MJ/kg
       # - Deposition (vapor → ice): releases L_v + L_f = 2.834 MJ/kg
-      # 
       # Physical reason: 
       # 1. Vapor → liquid would release L_v
       # 2. Liquid → ice would release L_f
