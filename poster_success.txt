@@ -1,0 +1,210 @@
+1. Sandy
+7-day 3 sites and 1 site
+
+2. Ian
+5-day targeted cluster perburb
+
+(base) [qhuang62@sg020:/scratch/qhuang62/control_AR_FZ_TC]$ python sandy_ftle_perturbation_test.py
+================================================================================
+  Hurricane Sandy 2012 - FTLE-Guided Cloud Seeding Test
+================================================================================
+
+Strategy: Adapt Moyan Liu's AR perturbation method to TCs
+Method: FTLE-targeted cloud seeding (heating + moisture removal)
+
+Initialization: 2012-10-23 00:00 UTC
+Sandy position: 12.6°N, 281.6°E
+Forecast length: 28 steps (168 hours)
+
+Loading Aurora model...
+✓ Model loaded on GPU
+
+Loading ERA5 data...
+Filtering to Aurora's 13 standard pressure levels...
+  Original: 13 levels
+  Filtered: 13 levels
+✓ Using levels: [50.0, 100.0, 150.0, 200.0, 250.0, 300.0, 400.0, 500.0, 600.0, 700.0, 850.0, 925.0, 1000.0]
+✓ Batch created: torch.Size([1, 2, 13, 721, 1440])
+
+Grid: 721 lats × 1440 lons
+Pressure levels: 13 levels
+
+================================================================================
+  Step 1: Calculate FTLE at Steering Level (500 hPa)
+================================================================================
+
+500 hPa winds: (721, 1440)
+U range: [-43.3, 56.2] m/s
+V range: [-43.3, 44.1] m/s
+
+🌀 Calculating forward FTLE...
+   Integration time: 48 hours
+   Time step: 6 hours
+   Step 1/2: Advecting particles...
+   Step 2/2: Computing FTLE field...
+✅ FTLE calculation complete
+   FTLE range: [-4.9829, 3.6479] day⁻¹
+
+✓ Cropped to Atlantic basin: (141, 161)
+  FTLE range in basin: [-3.4403, -0.7110] day⁻¹
+
+================================================================================
+  Step 2: Select FTLE-Guided Perturbation Locations
+================================================================================
+
+🔍 Finding optimal seeding points...
+  FTLE threshold (85th percentile): -1.5053
+  Skipping jet stream filtering (not provided)
+  Geographic bounds: lat [0, 35], lon [260, 300]
+
+  Found 3406 candidate points after filtering
+  Composite score range: 0.000 to 1.000
+
+  Filtering by minimum separation: 300 km...
+
+✅ Selected 10 candidates with min separation 300 km
+  Latitude range: 5.50° to 33.25°
+  Longitude range: 260.00° to 300.00°
+
+Filtering by distance from TC (12.6°N, 281.6°E):
+  Target range: 500-1500 km (environmental steering region)
+    ✗ Skip: 31.00°N, 300.00°E (distance: 2783 km, outside range)
+    ✓ Keep: 5.50°N, 277.75°E (distance: 895 km)
+    ✗ Skip: 33.25°N, 297.75°E (distance: 2821 km, outside range)
+    ✓ Keep: 8.25°N, 278.50°E (distance: 591 km)
+    ✗ Skip: 25.75°N, 265.75°E (distance: 2211 km, outside range)
+    ✗ Skip: 9.50°N, 262.25°E (distance: 2139 km, outside range)
+    ✗ Skip: 12.75°N, 260.00°E (distance: 2343 km, outside range)
+    ✓ Keep: 14.25°N, 269.00°E (distance: 1375 km)
+    ✗ Skip: 12.00°N, 265.25°E (distance: 1777 km, outside range)
+    ✗ Skip: 11.50°N, 284.00°E (distance: 288 km, outside range)
+
+✓ Selected 3 locations within environmental steering region
+
+✅ Created 3 seeding locations:
+  1. Lat:   5.50°, Lon: 277.75°, Radius: 300 km
+  2. Lat:   8.25°, Lon: 278.50°, Radius: 300 km
+  3. Lat:  14.25°, Lon: 269.00°, Radius: 300 km
+
+================================================================================
+  Step 3: Create Seeding Mask
+================================================================================
+
+Mask shape: (721, 1440)
+Seeded grid cells: 985
+Percentage of domain: 0.09%
+
+================================================================================
+  Step 4: Run Baseline Forecast (No Perturbation)
+================================================================================
+
+Running baseline forecast...
+   Running Sandy Baseline for 28 steps (168 hours)...
+/home/qhuang62/.local/lib/python3.12/site-packages/aurora/model/patchembed.py:112: UserWarning: Applied workaround for CuDNN issue, install nvrtc.so (Triggered internally at ../aten/src/ATen/native/cudnn/Conv_v8.cpp:80.)
+  proj = F.conv3d(x, weight, self.bias, stride=stride)
+      Completed 4/28 steps (24 hours)
+      Completed 8/28 steps (48 hours)
+      Completed 12/28 steps (72 hours)
+      Completed 16/28 steps (96 hours)
+      Completed 20/28 steps (120 hours)
+      Completed 24/28 steps (144 hours)
+      Completed 28/28 steps (168 hours)
+   Forecast complete: 28 timesteps
+✓ Baseline track: 29 positions
+  Final position: 44.59°N, 287.50°E
+  Saving baseline predictions...
+  ✓ Saved: /scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output/preds_baseline.pt
+
+================================================================================
+  Step 5: Apply FTLE-Guided Cloud Seeding Perturbation
+================================================================================
+
+
+================================================================================
+☁️ PHYSICALLY CONSISTENT Cloud Seeding Applied
+================================================================================
+
+⚙️  SEEDING PARAMETERS:
+  Pressure levels: [700.0, 500.0, 300.0] hPa
+  Freeze efficiency: 60%
+  Fallout fraction: 80%
+  Max removal fraction: 50%
+  Vertical coupling: False
+
+📊 RESULTS BY PRESSURE LEVEL:
+   Level  RH Before   RH After       ΔT           Δq       Precip
+   (hPa)        (%)        (%)      (K)       (g/kg)       (g/kg)
+--------------------------------------------------------------------------------
+     700       82.8       18.1   12.276      -4.3490       3.4792
+     500       71.1       23.2    5.278      -1.8697       1.4958
+     300       52.4       24.1    0.782      -0.2770       0.2216
+
+⚠️  WARNINGS:
+  ℹ️  100.0% of seeded cells were moisture-limited (too dry for full 60% efficiency)
+  ⚠️  Level 700 hPa: Created very dry air! Min RH = 0.0%
+  ⚠️  Level 500 hPa: Created very dry air! Min RH = 0.0%
+  ⚠️  Level 300 hPa: Created very dry air! Min RH = 0.0%
+
+================================================================================
+================================================================================
+  Step 6: Run Perturbed Forecast (FTLE-Seeded)
+================================================================================
+
+Running perturbed forecast...
+   Running Sandy FTLE-Seeded for 28 steps (168 hours)...
+      Completed 4/28 steps (24 hours)
+      Completed 8/28 steps (48 hours)
+      Completed 12/28 steps (72 hours)
+      Completed 16/28 steps (96 hours)
+      Completed 20/28 steps (120 hours)
+      Completed 24/28 steps (144 hours)
+      Completed 28/28 steps (168 hours)
+   Forecast complete: 28 timesteps
+✓ Seeded track: 29 positions
+  Final position: 43.01°N, 290.86°E
+  Saving seeded predictions...
+  ✓ Saved: /scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output/preds_seeded.pt
+
+================================================================================
+  Step 7: Compute Track Deviation
+================================================================================
+
+Track Deviations (Baseline vs FTLE-Seeded Perturbed):
+  24hr (+4 steps): 26.8 km
+  48hr (+8 steps): 38.1 km
+  72hr (+12 steps): 75.3 km
+  96hr (+16 steps): 37.1 km
+  120hr (+20 steps): 23.4 km
+  Final: 321.6 km
+
+Final position shift:
+  Latitude: -1.58° (175.2 km south)
+  Longitude: +3.36° (265.4 km east)
+
+================================================================================
+  Step 8: Create Visualizations
+================================================================================
+
+✓ Saved track comparison: /scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output/sandy_ftle_track_comparison.png
+
+Creating seeding location visualization...
+✓ Saved seeding map: /scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output/seeding_locations_map.png
+
+Creating track deviation plot...
+✓ Saved deviation plot: /scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output/track_deviation_timeseries.png
+
+================================================================================
+  ✓ Test Complete!
+================================================================================
+
+Summary:
+  • FTLE candidates: 3
+  • Seeded area: 985 grid cells
+  • Max track deviation: 321.6 km
+  • Final track deviation: 321.6 km
+
+Next steps:
+  1. Analyze physical mechanisms (inspect wind/pressure fields)
+  2. Test different FTLE thresholds and seeding radii
+  3. Compare with your previous grid-based method
+  4. Extend to other TCs if successful

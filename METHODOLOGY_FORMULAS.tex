@@ -1,0 +1,308 @@
+% ============================================================================
+% METHODOLOGY: Key Formulas in LaTeX
+% FTLE Calculation, Perturbation Site Selection, Cloud Seeding Simulation
+% ============================================================================
+
+\documentclass{article}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{bm}
+
+\begin{document}
+
+% ============================================================================
+\section*{1. FTLE (Finite-Time Lyapunov Exponent)}
+% ============================================================================
+
+\subsection*{1.1 Particle Advection (Euler Integration)}
+
+At each time step $n$, advect particles using wind field:
+
+\begin{align}
+\text{lat}_{n+1} &= \text{lat}_n + \frac{v \cdot \Delta t}{111{,}000 \text{ m}} \\
+\text{lon}_{n+1} &= \text{lon}_n + \frac{u \cdot \Delta t}{111{,}000 \text{ m} \cdot \cos(\text{lat}_n)}
+\end{align}
+
+where:
+\begin{itemize}
+    \item $u, v$ = zonal and meridional wind components (m/s)
+    \item $\Delta t$ = time step (21,600 s = 6 hours)
+    \item $111{,}000$ m $\approx$ 111 km/degree
+\end{itemize}
+
+% ----------------------------------------------------------------------------
+\subsection*{1.2 Flow Map Gradient (Jacobian Matrix)}
+
+Deformation gradient tensor computed using centered finite differences:
+
+\begin{equation}
+\frac{\partial \bm{\Phi}}{\partial \bm{x}_0} =
+\begin{bmatrix}
+\dfrac{\partial \text{lat}_f}{\partial \text{lat}_0} & \dfrac{\partial \text{lat}_f}{\partial \text{lon}_0} \\[0.5em]
+\dfrac{\partial \text{lon}_f}{\partial \text{lat}_0} & \dfrac{\partial \text{lon}_f}{\partial \text{lon}_0}
+\end{bmatrix}
+\end{equation}
+
+Finite difference approximations:
+\begin{align}
+\frac{\partial \text{lat}_f}{\partial \text{lat}_0} &\approx \frac{\text{lat}_f[i+1,j] - \text{lat}_f[i-1,j]}{2 \cdot \Delta \text{lat}} \\
+\frac{\partial \text{lat}_f}{\partial \text{lon}_0} &\approx \frac{\text{lat}_f[i,j+1] - \text{lat}_f[i,j-1]}{2 \cdot \Delta \text{lon} \cdot \cos(\text{lat})} \\
+\frac{\partial \text{lon}_f}{\partial \text{lat}_0} &\approx \frac{\text{lon}_f[i+1,j] - \text{lon}_f[i-1,j]}{2 \cdot \Delta \text{lat}} \\
+\frac{\partial \text{lon}_f}{\partial \text{lon}_0} &\approx \frac{\text{lon}_f[i,j+1] - \text{lon}_f[i,j-1]}{2 \cdot \Delta \text{lon} \cdot \cos(\text{lat})}
+\end{align}
+
+% ----------------------------------------------------------------------------
+\subsection*{1.3 Cauchy-Green Strain Tensor}
+
+\begin{equation}
+\bm{C} = \left(\frac{\partial \bm{\Phi}}{\partial \bm{x}_0}\right)^T \cdot \left(\frac{\partial \bm{\Phi}}{\partial \bm{x}_0}\right)
+\end{equation}
+
+% ----------------------------------------------------------------------------
+\subsection*{1.4 FTLE Calculation}
+
+\begin{equation}
+\boxed{
+\text{FTLE} = \frac{1}{2T} \ln(\lambda_{\max})
+}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\lambda_{\max}$ = largest eigenvalue of Cauchy-Green tensor $\bm{C}$
+    \item $T$ = integration time (48 hours = 2 days for tropical cyclones)
+    \item Units: day$^{-1}$
+\end{itemize}
+
+Alternative formulation (using singular values):
+\begin{equation}
+\text{FTLE} = \frac{1}{T} \ln\left(\sqrt{\lambda_{\max}}\right) = \frac{1}{T} \ln(\sigma_{\max})
+\end{equation}
+
+where $\sigma_{\max}$ is the maximum singular value of $\frac{\partial \bm{\Phi}}{\partial \bm{x}_0}$.
+
+
+% ============================================================================
+\section*{2. Perturbation Site Selection}
+% ============================================================================
+
+\subsection*{2.1 FTLE Threshold (Sensitivity Criterion)}
+
+Select top $p$-th percentile of FTLE values:
+
+\begin{equation}
+\text{FTLE}_{\text{threshold}} = P_p(\text{FTLE field})
+\end{equation}
+
+where $P_p$ denotes the $p$-th percentile function (typically $p = 85$, i.e., top 15\%).
+
+Candidate set:
+\begin{equation}
+\mathcal{S}_{\text{FTLE}} = \left\{ (\text{lat}, \text{lon}) \,|\, \text{FTLE}(\text{lat}, \text{lon}) \geq \text{FTLE}_{\text{threshold}} \right\}
+\end{equation}
+
+% ----------------------------------------------------------------------------
+\subsection*{2.2 Distance from TC Center (Environmental Steering Criterion)}
+
+Haversine distance formula:
+\begin{align}
+a &= \sin^2\left(\frac{\Delta \text{lat}}{2}\right) + \cos(\text{lat}_1) \cdot \cos(\text{lat}_2) \cdot \sin^2\left(\frac{\Delta \text{lon}}{2}\right) \\
+c &= 2 \cdot \arcsin(\sqrt{a}) \\
+d &= R_{\text{Earth}} \cdot c
+\end{align}
+
+where:
+\begin{itemize}
+    \item $\Delta \text{lat} = \text{lat}_2 - \text{lat}_1$, $\Delta \text{lon} = \text{lon}_2 - \text{lon}_1$
+    \item $R_{\text{Earth}} = 6371$ km
+\end{itemize}
+
+Environmental steering region filter:
+\begin{equation}
+\mathcal{S}_{\text{dist}} = \left\{ (\text{lat}, \text{lon}) \in \mathcal{S}_{\text{FTLE}} \,|\, d_{\min} \leq d(\text{lat}, \text{lon}, \text{lat}_{\text{TC}}, \text{lon}_{\text{TC}}) \leq d_{\max} \right\}
+\end{equation}
+
+where typically $d_{\min} = 500$ km and $d_{\max} = 1500$ km for TC track modification.
+
+% ----------------------------------------------------------------------------
+\subsection*{2.3 Minimum Site Separation}
+
+For any two selected sites $i$ and $j$:
+\begin{equation}
+d(\text{lat}_i, \text{lon}_i, \text{lat}_j, \text{lon}_j) \geq d_{\text{sep}}
+\end{equation}
+
+where $d_{\text{sep}} = 300$ km (avoids redundant nearby sites).
+
+% ----------------------------------------------------------------------------
+\subsection*{2.4 Seeding Mask Creation}
+
+For each selected site center $(\text{lat}_c, \text{lon}_c)$ with radius $R = 300$ km:
+
+\begin{equation}
+M[i,j] =
+\begin{cases}
+1 & \text{if } d(\text{lat}[i], \text{lon}[j], \text{lat}_c, \text{lon}_c) \leq R \\
+0 & \text{otherwise}
+\end{cases}
+\end{equation}
+
+Combined mask for $N$ sites:
+\begin{equation}
+\boxed{
+M_{\text{total}} = \bigvee_{k=1}^{N} M_k = \text{OR}(M_1, M_2, \ldots, M_N)
+}
+\end{equation}
+
+
+% ============================================================================
+\section*{3. Cloud Seeding Perturbation Simulation}
+% ============================================================================
+
+\subsection*{3.1 Saturation Mixing Ratio (Clausius-Clapeyron)}
+
+Saturation vapor pressure:
+\begin{equation}
+e_{\text{sat}}(T) = 611.2 \text{ Pa} \cdot \exp\left[\frac{L_v}{R_v} \left(\frac{1}{T_0} - \frac{1}{T}\right)\right]
+\end{equation}
+
+Saturation mixing ratio:
+\begin{equation}
+q_{\text{sat}} = \frac{\varepsilon \cdot e_{\text{sat}}}{P - e_{\text{sat}}}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $L_v = 2.5 \times 10^6$ J/kg (latent heat of vaporization)
+    \item $R_v = 461.5$ J/(kg·K) (gas constant for water vapor)
+    \item $\varepsilon = 0.622$ (molecular weight ratio $M_d / M_v$)
+    \item $T_0 = 273.15$ K
+    \item $P$ = pressure (Pa)
+\end{itemize}
+
+% ----------------------------------------------------------------------------
+\subsection*{3.2 Relative Humidity}
+
+\begin{equation}
+\text{RH} = \frac{q}{q_{\text{sat}}}
+\end{equation}
+
+where $q$ is the specific humidity (kg/kg).
+
+% ----------------------------------------------------------------------------
+\subsection*{3.3 Water Vapor Frozen (Ice Nucleation/Deposition)}
+
+Amount of vapor frozen via deposition process:
+\begin{equation}
+q_{\text{frozen}} = q_{\text{old}} \cdot \eta_{\text{freeze}} \cdot \text{RH} \cdot M
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\eta_{\text{freeze}} = 0.60$ (freeze efficiency, tunable parameter)
+    \item $M$ = spatial seeding mask
+\end{itemize}
+
+% ----------------------------------------------------------------------------
+\subsection*{3.4 Precipitation Removal}
+
+Precipitation fallout:
+\begin{equation}
+q_{\text{precip}} = q_{\text{frozen}} \cdot f_{\text{fallout}}
+\end{equation}
+
+Actual moisture removed (with safety cap):
+\begin{equation}
+q_{\text{removed}} = \min(q_{\text{precip}}, \, q_{\text{old}} \cdot f_{\max})
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $f_{\text{fallout}} = 0.80$ (80\% precipitates out)
+    \item $f_{\max} = 0.50$ (maximum 50\% of available moisture, safety limit)
+\end{itemize}
+
+% ----------------------------------------------------------------------------
+\subsection*{3.5 Latent Heat Release}
+
+Energy released during deposition (vapor $\rightarrow$ ice):
+\begin{equation}
+Q_{\text{released}} = q_{\text{removed}} \cdot L_d
+\end{equation}
+
+Temperature change:
+\begin{equation}
+\Delta T = \frac{Q_{\text{released}}}{C_p}
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $L_d = L_v + L_f = 2.834 \times 10^6$ J/kg (deposition latent heat)
+    \item $L_f = 3.34 \times 10^5$ J/kg (latent heat of fusion)
+    \item $C_p = 1004$ J/(kg·K) (specific heat of air at constant pressure)
+\end{itemize}
+
+% ----------------------------------------------------------------------------
+\subsection*{3.6 Apply Perturbations}
+
+New atmospheric state:
+\begin{equation}
+\boxed{
+\begin{aligned}
+T_{\text{new}} &= T_{\text{old}} + \Delta T \cdot M \\
+q_{\text{new}} &= q_{\text{old}} - q_{\text{removed}} \cdot M
+\end{aligned}
+}
+\end{equation}
+
+where $M$ is the seeding mask applied at pressure levels $P = [700, 500, 300]$ hPa.
+
+% ----------------------------------------------------------------------------
+\subsection*{3.7 Physical Validation}
+
+After applying perturbations, recalculate saturation and validate bounds:
+
+\begin{align}
+q_{\text{sat}}^{\text{new}} &= f(T_{\text{new}}, P) \quad \text{(recalculate with new temperature)} \\
+\text{RH}^{\text{new}} &= \frac{q_{\text{new}}}{q_{\text{sat}}^{\text{new}}} \\
+0 &\leq \text{RH}^{\text{new}} \leq 1 \quad \text{(enforce bounds)} \\
+q_{\text{new}} &\geq 0 \quad \text{(no negative moisture)}
+\end{align}
+
+
+% ============================================================================
+\section*{Summary of Key Parameters (Sandy 2012 Case)}
+% ============================================================================
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\hline
+\textbf{Parameter} & \textbf{Symbol} & \textbf{Value} \\
+\hline
+FTLE integration time & $T$ & 48 hours \\
+FTLE percentile threshold & $p$ & 85\% \\
+TC distance range & $[d_{\min}, d_{\max}]$ & [500, 1500] km \\
+Site radius & $R$ & 300 km \\
+Site separation & $d_{\text{sep}}$ & 300 km \\
+Pressure levels & $P$ & [700, 500, 300] hPa \\
+Freeze efficiency & $\eta_{\text{freeze}}$ & 0.60 \\
+Fallout fraction & $f_{\text{fallout}}$ & 0.80 \\
+Max removal fraction & $f_{\max}$ & 0.50 \\
+Deposition latent heat & $L_d$ & $2.834 \times 10^6$ J/kg \\
+Specific heat of air & $C_p$ & 1004 J/(kg·K) \\
+\hline
+\end{tabular}
+\end{table}
+
+\subsection*{Typical Perturbation Magnitudes}
+
+\begin{align}
+\Delta T &: +0.5 \text{ to } +3.0 \text{ K} \quad \text{(warming from latent heat)} \\
+\Delta q &: -0.5 \text{ to } -2.0 \text{ g/kg} \quad \text{(drying from precipitation)} \\
+Q_{\text{released}} &: \sim 1\text{--}3 \text{ MJ/kg} \\
+\text{Seeded area} &: \sim 850{,}000 \text{ km}^2 \quad \text{(985 grid cells at 0.25° resolution)} \\
+\text{Seeded mass} &: \sim 10^{12}\text{--}10^{13} \text{ kg}
+\end{align}
+
+\end{document}

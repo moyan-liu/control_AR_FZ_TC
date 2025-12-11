@@ -1,0 +1,8 @@
+ask claude to read md file and relevant script to understand whats going on and make changes for improvement.
+
+fix the scratch/qhuang62/control_AR_FZ_TC/analyze_sandy_perturbation_fields.py that the output png plots, in the difference plot they stil use different legend scale. they should be one same fixed scale across different timesteps for difference plot. if the scale is dynamic how can we compare the difference evolution in the gif????? scratch/qhuang62/control_AR_FZ_TC/create_field_gifs.py
+
+need to update legend in seeding_locations_map.png that the perturbation site legend is in E or W please fix to use in W since the map lon is in W.
+
+and update scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_perturbation_test-site3.py to use only site 3 perturbation (only perturb at site 3 please, 14.25N, 269E) -- update the outputs' name to add_site3 like the png and pt. 
+
