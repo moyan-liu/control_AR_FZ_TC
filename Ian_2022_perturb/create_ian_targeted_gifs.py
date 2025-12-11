@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Create GIF Animations from Field Analysis Plots
+Create GIF Animations from Ian Targeted Cluster Field Analysis
 
-This script creates animated GIFs from the field analysis timestep plots,
+This script creates animated GIFs from the Ian targeted cluster field analysis plots,
 showing the evolution of atmospheric fields over the forecast period.
 
 Creates 5 GIFs:
@@ -10,12 +10,12 @@ Creates 5 GIFs:
 - z500_evolution.gif    - 500 hPa geopotential height evolution
 - t700_evolution.gif    - 700 hPa temperature evolution
 - rh850_evolution.gif   - 850 hPa relative humidity evolution
-- wind250_evolution.gif - 250 hPa wind speed evolution (upper-level jet)
+- wind300_evolution.gif - 300 hPa wind speed evolution (jet stream)
 
-Each GIF shows all timesteps (000-027) as frames.
+Each GIF shows all timesteps as frames.
 
-Author: Field Evolution Visualization
-Date: 2025-12-02
+Author: Adapted from create_field_gifs.py for Ian targeted test
+Date: 2025-12-05
 """
 
 import sys
@@ -24,19 +24,20 @@ from PIL import Image
 import numpy as np
 
 print("=" * 80)
-print("  Creating Field Evolution GIFs")
+print("  Creating Ian Targeted Cluster Field Evolution GIFs")
 print("=" * 80)
 print()
 
 # =========================================================================
 # CONFIGURATION
 # =========================================================================
-field_analysis_dir = Path("/scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output/field_analysis")
+field_analysis_dir = Path("/scratch/qhuang62/control_AR_FZ_TC/Ian_2022_perturb/ian_ftle_test_output_targeted/field_analysis")
 output_dir = field_analysis_dir  # Save GIFs in same directory
 
 if not field_analysis_dir.exists():
     print(f"❌ Field analysis directory not found: {field_analysis_dir}")
-    print("   Run analyze_sandy_perturbation_fields.py first!")
+    print("   Run analyze_ian_perturbation_fields.py first!")
+    print("   (Make sure to update it to use ian_ftle_test_output_targeted)")
     sys.exit(1)
 
 print(f"Input directory: {field_analysis_dir}")
@@ -67,10 +68,10 @@ fields = {
         'output': 'rh850_evolution.gif',
         'description': '850 hPa Relative Humidity'
     },
-    'wind250': {
-        'pattern': 'wind250_t*.png',
-        'output': 'wind250_evolution.gif',
-        'description': '250 hPa Wind Speed (Upper-Level Jet)'
+    'wind300': {
+        'pattern': 'wind300_t*.png',
+        'output': 'wind300_evolution.gif',
+        'description': '300 hPa Wind Speed (Jet Stream)'
     }
 }
 
@@ -182,12 +183,19 @@ for field_name, field_info in fields.items():
     else:
         print(f"  ✗ {field_info['output']:25s} - Not created")
 print()
-print("Viewing tips:")
+print("Viewing tips for Ian Targeted Cluster Test:")
 print("  - Each frame = 6 hours of forecast")
 print("  - Watch for spatial patterns in difference panels")
 print("  - Look for Rossby wave propagation in Z500")
-print("  - Track diabatic heating evolution in T700")
-print("  - Monitor moisture redistribution in RH850")
-print("  - Check jet stream perturbations in WIND250 (Weather Jiu-Jitsu?)")
-print("  - Identify when perturbation effects become visible")
+print("  - Track diabatic heating evolution in T700 (cluster seeding effect)")
+print("  - Monitor moisture redistribution in RH850 (drying from seeding)")
+print("  - Check jet stream perturbations in WIND300")
+print("  - Compare with old targeted test (wrong center location)")
+print("  - Identify when cluster perturbation effects become visible")
+print()
+print("Ian Targeted Cluster Context:")
+print(f"  - Cluster center: 12.25°N, 278.75°E (81.25°W)")
+print(f"  - This is the CORRECT location (Site 2 from successful tests)")
+print(f"  - Old targeted test used WRONG location: 20.0°N, 285.0°E")
+print(f"  - Field analysis should show cluster seeding effects")
 print()

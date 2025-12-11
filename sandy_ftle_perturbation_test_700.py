@@ -351,19 +351,20 @@ def main():
         'init_lon': 281.6,  # -78.4°W = 281.6°E
         'steps': 28,  # 7 days to landfall (Oct 30)
         'data_path': Path("/scratch/qhuang62/aurora-extreme-predictability/research/TC/data/era5_sandy_2012"),
-        'output_dir': Path("/scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output"),
+        'output_dir': Path("/scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_925_850_700_rh75_output"),
     }
 
     CONFIG['output_dir'].mkdir(exist_ok=True, parents=True)
 
     # TC-adapted seeding configuration (environmental modification)
     SEEDING_CONFIG_SANDY = {
-        'layers_mb': [700.0, 500.0, 300.0],  # Steering levels
-        'freeze_efficiency': 0.6,            # Moderate for environment
-        'fallout_fraction': 0.80,             # High precipitation
-        'max_removal_fraction': 0.50,         # Conservative moisture removal
+        'layers_mb': [925.0, 850.0, 700.0],  # Steering levels (meteorologically realistic)
+        'freeze_efficiency': 0.3,            # original 0.6 now we try 0.3 to see if still work
+        'fallout_fraction': 0.80,            # High precipitation
+        'max_removal_fraction': 0.50,        # Conservative moisture removal
+        'min_RH': 0.75,                      # Only seed where RH > 75% (matches poster)
         'energy_method': 'net_realistic',
-        'vertical_coupling': False,           # Independent levels
+        'vertical_coupling': False,          # Independent levels
         'coupling_factor': 0.3
     }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze Hurricane Sandy FTLE Perturbation - Field Evolution
+Analyze Hurricane Ian FTLE Perturbation - Field Evolution
 
 This script extracts and visualizes atmospheric fields at every timestep
 to understand the physical mechanisms behind the track deviation.
@@ -12,8 +12,11 @@ Focuses on:
 4. 850 hPa relative humidity - moisture changes
 5. 300 hPa wind speed - jet stream location and strength
 
-Author: Analysis of FTLE perturbation test
-Date: 2025-12-02
+Key difference from Sandy: Uses Gulf/Caribbean/Florida map extent and
+global min/max for difference plot scaling (for GIF consistency).
+
+Author: Adapted from analyze_sandy_perturbation_fields.py
+Date: 2025-12-04
 """
 
 import sys
@@ -27,14 +30,14 @@ import cartopy.feature as cfeature
 from datetime import datetime, timedelta
 
 print("=" * 80)
-print("  Analyzing Sandy FTLE Perturbation - Field Evolution")
+print("  Analyzing Ian FTLE Perturbation - Field Evolution")
 print("=" * 80)
 print()
 
 # =========================================================================
 # CONFIGURATION
 # =========================================================================
-results_dir = Path("/scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output")
+results_dir = Path("/scratch/qhuang62/control_AR_FZ_TC/Ian_2022_perturb/ian_ftle_test_output_targeted") #change to see targeted changes
 pred_ctrl_path = results_dir / "preds_baseline.pt"
 pred_seed_path = results_dir / "preds_seeded.pt"
 
@@ -50,12 +53,12 @@ print()
 
 if not pred_ctrl_path.exists():
     print(f"❌ Baseline predictions not found: {pred_ctrl_path}")
-    print("   Run sandy_ftle_perturbation_test.py first!")
+    print("   Run ian_ftle_perturbation_test.py first!")
     sys.exit(1)
 
 if not pred_seed_path.exists():
     print(f"❌ Seeded predictions not found: {pred_seed_path}")
-    print("   Run sandy_ftle_perturbation_test.py first!")
+    print("   Run ian_ftle_perturbation_test.py first!")
     sys.exit(1)
 
 preds_baseline = torch.load(pred_ctrl_path)
@@ -75,7 +78,7 @@ print(f"Pressure levels: {pressure_levels}")
 print()
 
 # Find level indices
-idx_250 = pressure_levels.index(250.0)
+idx_300 = pressure_levels.index(300.0)
 idx_500 = pressure_levels.index(500.0)
 idx_700 = pressure_levels.index(700.0)
 idx_850 = pressure_levels.index(850.0)
@@ -88,19 +91,22 @@ def plot_field_comparison(field_ctrl, field_seed, lats, lons,
                           field_name, units, timestep, hours,
                           save_path, extent=None,
                           vmin=None, vmax=None, cmap='viridis',
-                          contour_levels=None, diff_vmin=None, diff_vmax=None):
+                          contour_levels=None, diff_vmin=None, diff_vmax=None,
+                          diff_cmap=None):
     """Create 3-panel comparison: Baseline, Perturbed, Difference.
 
-    Uses same colormap for all 3 panels with diverging version centered at zero for difference.
+    Uses same colormap for baseline/perturbed, optionally different for difference.
 
     Parameters
     ----------
     diff_vmin, diff_vmax : float, optional
-        Fixed color scale limits for difference plot. If not provided, uses dynamic scaling.
+        Fixed color scale limits for difference plot (computed globally).
+    diff_cmap : str, optional
+        Colormap for difference plot. If None, uses same as cmap.
     """
 
     if extent is None:
-        extent = [260, 320, 10, 50]
+        extent = [270, 300, 10, 35]  # Gulf/Caribbean/Florida
 
     fig = plt.figure(figsize=(20, 6))
     proj = ccrs.PlateCarree()
@@ -147,7 +153,6 @@ def plot_field_comparison(field_ctrl, field_seed, lats, lons,
 
     # Use fixed symmetric scaling if provided, otherwise dynamic
     if diff_vmin is not None and diff_vmax is not None:
-        # Use the provided fixed scale
         use_vmin = diff_vmin
         use_vmax = diff_vmax
     else:
@@ -156,12 +161,14 @@ def plot_field_comparison(field_ctrl, field_seed, lats, lons,
         use_vmin = -diff_scale
         use_vmax = diff_scale
 
-    # Use the SAME colormap as the baseline/perturbed plots
-    # Create explicit level boundaries for fixed color scale
-    diff_levels = np.linspace(use_vmin, use_vmax, 21)  # 21 boundaries = 20 contours
+    # Use explicit level boundaries for fixed color scale
+    diff_levels = np.linspace(use_vmin, use_vmax, 21)
+
+    # Use different colormap for difference if specified
+    diff_colormap = diff_cmap if diff_cmap is not None else cmap
 
     im3 = ax3.contourf(LON, LAT, diff,
-                       levels=diff_levels, cmap=cmap,
+                       levels=diff_levels, cmap=diff_colormap,
                        transform=proj, extend='both')
     plt.colorbar(im3, ax=ax3, shrink=0.8, label=f'Δ{units}')
 
@@ -184,7 +191,7 @@ print("This will create 5 plots per timestep (MSL, Z500, T700, RH850, WIND300)")
 print()
 
 n_timesteps = min(len(preds_baseline), len(preds_seeded))
-extent = [260, 320, 10, 50]  # Atlantic basin
+extent = [270, 300, 10, 35]  # Gulf/Caribbean/Florida (from Ian prediction study)
 
 # Statistics tracking
 stats = {
@@ -194,7 +201,7 @@ stats = {
     'z500_max_diff': [],
     't700_max_diff': [],
     'rh850_max_diff': [],
-    'wind250_max_diff': []
+    'wind300_max_diff': []
 }
 
 # =========================================================================
@@ -209,7 +216,7 @@ global_diff_range = {
     'z500': {'min': np.inf, 'max': -np.inf},
     't700': {'min': np.inf, 'max': -np.inf},
     'rh850': {'min': np.inf, 'max': -np.inf},
-    'wind250': {'min': np.inf, 'max': -np.inf}
+    'wind300': {'min': np.inf, 'max': -np.inf}
 }
 
 for t in range(n_timesteps):
@@ -256,25 +263,25 @@ for t in range(n_timesteps):
     global_diff_range['rh850']['min'] = min(global_diff_range['rh850']['min'], np.min(diff_rh850))
     global_diff_range['rh850']['max'] = max(global_diff_range['rh850']['max'], np.max(diff_rh850))
 
-    # 250 hPa Wind Speed
-    u250_ctrl = pred_ctrl.atmos_vars['u'][0, 0, idx_250].cpu().numpy()
-    v250_ctrl = pred_ctrl.atmos_vars['v'][0, 0, idx_250].cpu().numpy()
-    u250_seed = pred_seed.atmos_vars['u'][0, 0, idx_250].cpu().numpy()
-    v250_seed = pred_seed.atmos_vars['v'][0, 0, idx_250].cpu().numpy()
+    # 300 hPa Wind Speed
+    u300_ctrl = pred_ctrl.atmos_vars['u'][0, 0, idx_300].cpu().numpy()
+    v300_ctrl = pred_ctrl.atmos_vars['v'][0, 0, idx_300].cpu().numpy()
+    u300_seed = pred_seed.atmos_vars['u'][0, 0, idx_300].cpu().numpy()
+    v300_seed = pred_seed.atmos_vars['v'][0, 0, idx_300].cpu().numpy()
 
-    wind250_ctrl = np.sqrt(u250_ctrl**2 + v250_ctrl**2)
-    wind250_seed = np.sqrt(u250_seed**2 + v250_seed**2)
+    wind300_ctrl = np.sqrt(u300_ctrl**2 + v300_ctrl**2)
+    wind300_seed = np.sqrt(u300_seed**2 + v300_seed**2)
 
-    diff_wind250 = wind250_seed - wind250_ctrl
-    global_diff_range['wind250']['min'] = min(global_diff_range['wind250']['min'], np.min(diff_wind250))
-    global_diff_range['wind250']['max'] = max(global_diff_range['wind250']['max'], np.max(diff_wind250))
+    diff_wind300 = wind300_seed - wind300_ctrl
+    global_diff_range['wind300']['min'] = min(global_diff_range['wind300']['min'], np.min(diff_wind300))
+    global_diff_range['wind300']['max'] = max(global_diff_range['wind300']['max'], np.max(diff_wind300))
 
 print("Global difference ranges across all timesteps (raw):")
 print(f"  MSL:     {global_diff_range['msl']['min']:.2f} to {global_diff_range['msl']['max']:.2f} hPa")
 print(f"  Z500:    {global_diff_range['z500']['min']:.1f} to {global_diff_range['z500']['max']:.1f} m")
 print(f"  T700:    {global_diff_range['t700']['min']:.3f} to {global_diff_range['t700']['max']:.3f} °C")
 print(f"  RH850:   {global_diff_range['rh850']['min']:.2f} to {global_diff_range['rh850']['max']:.2f} %")
-print(f"  WIND250: {global_diff_range['wind250']['min']:.2f} to {global_diff_range['wind250']['max']:.2f} m/s")
+print(f"  WIND300: {global_diff_range['wind300']['min']:.2f} to {global_diff_range['wind300']['max']:.2f} m/s")
 print()
 
 # Make difference scales symmetric around zero (so zero = white in diverging colormap)
@@ -289,7 +296,7 @@ print(f"  MSL:     {symmetric_diff_range['msl']['min']:.2f} to {symmetric_diff_r
 print(f"  Z500:    {symmetric_diff_range['z500']['min']:.1f} to {symmetric_diff_range['z500']['max']:.1f} m")
 print(f"  T700:    {symmetric_diff_range['t700']['min']:.3f} to {symmetric_diff_range['t700']['max']:.3f} °C")
 print(f"  RH850:   {symmetric_diff_range['rh850']['min']:.2f} to {symmetric_diff_range['rh850']['max']:.2f} %")
-print(f"  WIND250: {symmetric_diff_range['wind250']['min']:.2f} to {symmetric_diff_range['wind250']['max']:.2f} m/s")
+print(f"  WIND300: {symmetric_diff_range['wind300']['min']:.2f} to {symmetric_diff_range['wind300']['max']:.2f} m/s")
 print()
 print("Second pass: Creating plots with fixed symmetric difference scales...")
 print()
@@ -319,20 +326,20 @@ for t in range(n_timesteps):
     )
 
     # 2. 500 hPa Geopotential Height
-    z500_ctrl = pred_ctrl.atmos_vars['z'][0, 0, idx_500].cpu().numpy() / 9.81  # geopotential to meters
+    z500_ctrl = pred_ctrl.atmos_vars['z'][0, 0, idx_500].cpu().numpy() / 9.81
     z500_seed = pred_seed.atmos_vars['z'][0, 0, idx_500].cpu().numpy() / 9.81
 
     diff_z500 = plot_field_comparison(
         z500_ctrl, z500_seed, lats, lons,
         '500 hPa Geopotential Height', 'm', t, hours,
         output_dir / f'z500_t{t:03d}.png',
-        extent=extent, cmap='PRGn',  # Purple-Green (matches Ian)
+        extent=extent, cmap='PRGn',  # Purple-Green for all panels
         contour_levels=np.arange(5200, 6000, 40),
         diff_vmin=symmetric_diff_range['z500']['min'], diff_vmax=symmetric_diff_range['z500']['max']
     )
 
-    # 3. 700 hPa Temperature (INTEGER CONTOURS)
-    t700_ctrl = pred_ctrl.atmos_vars['t'][0, 0, idx_700].cpu().numpy() - 273.15  # K to C
+    # 3. 700 hPa Temperature
+    t700_ctrl = pred_ctrl.atmos_vars['t'][0, 0, idx_700].cpu().numpy() - 273.15
     t700_seed = pred_seed.atmos_vars['t'][0, 0, idx_700].cpu().numpy() - 273.15
 
     diff_t700 = plot_field_comparison(
@@ -340,7 +347,7 @@ for t in range(n_timesteps):
         '700 hPa Temperature', '°C', t, hours,
         output_dir / f't700_t{t:03d}.png',
         extent=extent, cmap='RdBu_r',  # Red-White-Blue (white at zero)
-        contour_levels=np.arange(-10, 26, 2),  # Integer levels: -10, -8, ..., 24
+        contour_levels=np.arange(-10, 26, 2),
         diff_vmin=symmetric_diff_range['t700']['min'], diff_vmax=symmetric_diff_range['t700']['max']
     )
 
@@ -351,7 +358,7 @@ for t in range(n_timesteps):
     q850_seed = pred_seed.atmos_vars['q'][0, 0, idx_850].cpu().numpy()
 
     # Calculate RH
-    P_850 = 850 * 100  # Pa
+    P_850 = 850 * 100
     e_sat_ctrl = 611.2 * np.exp(17.67 * (t850_ctrl - 273.15) / (t850_ctrl - 29.65))
     q_sat_ctrl = 0.622 * e_sat_ctrl / P_850
     rh_ctrl = np.clip((q850_ctrl / q_sat_ctrl) * 100, 0, 100)
@@ -369,23 +376,22 @@ for t in range(n_timesteps):
         diff_vmin=symmetric_diff_range['rh850']['min'], diff_vmax=symmetric_diff_range['rh850']['max']
     )
 
-    # 5. 250 hPa Wind Speed (UPPER-LEVEL JET)
-    u250_ctrl = pred_ctrl.atmos_vars['u'][0, 0, idx_250].cpu().numpy()
-    v250_ctrl = pred_ctrl.atmos_vars['v'][0, 0, idx_250].cpu().numpy()
-    u250_seed = pred_seed.atmos_vars['u'][0, 0, idx_250].cpu().numpy()
-    v250_seed = pred_seed.atmos_vars['v'][0, 0, idx_250].cpu().numpy()
+    # 5. 300 hPa Wind Speed
+    u300_ctrl = pred_ctrl.atmos_vars['u'][0, 0, idx_300].cpu().numpy()
+    v300_ctrl = pred_ctrl.atmos_vars['v'][0, 0, idx_300].cpu().numpy()
+    u300_seed = pred_seed.atmos_vars['u'][0, 0, idx_300].cpu().numpy()
+    v300_seed = pred_seed.atmos_vars['v'][0, 0, idx_300].cpu().numpy()
 
-    # Calculate wind speed magnitude
-    wind250_ctrl = np.sqrt(u250_ctrl**2 + v250_ctrl**2)
-    wind250_seed = np.sqrt(u250_seed**2 + v250_seed**2)
+    wind300_ctrl = np.sqrt(u300_ctrl**2 + v300_ctrl**2)
+    wind300_seed = np.sqrt(u300_seed**2 + v300_seed**2)
 
-    diff_wind250 = plot_field_comparison(
-        wind250_ctrl, wind250_seed, lats, lons,
-        '250 hPa Wind Speed', 'm/s', t, hours,
-        output_dir / f'wind250_t{t:03d}.png',
-        extent=extent, vmin=0, vmax=80, cmap='PuOr',  # Purple-Orange (matches Ian)
+    diff_wind300 = plot_field_comparison(
+        wind300_ctrl, wind300_seed, lats, lons,
+        '300 hPa Wind Speed', 'm/s', t, hours,
+        output_dir / f'wind300_t{t:03d}.png',
+        extent=extent, vmin=0, vmax=80, cmap='PuOr',  # Purple-Orange for all panels
         contour_levels=np.arange(0, 81, 5),
-        diff_vmin=symmetric_diff_range['wind250']['min'], diff_vmax=symmetric_diff_range['wind250']['max']
+        diff_vmin=symmetric_diff_range['wind300']['min'], diff_vmax=symmetric_diff_range['wind300']['max']
     )
 
     # Track statistics
@@ -395,11 +401,11 @@ for t in range(n_timesteps):
     stats['z500_max_diff'].append(np.max(np.abs(diff_z500)))
     stats['t700_max_diff'].append(np.max(np.abs(diff_t700)))
     stats['rh850_max_diff'].append(np.max(np.abs(diff_rh850)))
-    stats['wind250_max_diff'].append(np.max(np.abs(diff_wind250)))
+    stats['wind300_max_diff'].append(np.max(np.abs(diff_wind300)))
 
     print(f"✓ MSL:{stats['msl_max_diff'][-1]:.1f}hPa Z500:{stats['z500_max_diff'][-1]:.0f}m "
           f"T700:{stats['t700_max_diff'][-1]:.2f}°C RH850:{stats['rh850_max_diff'][-1]:.1f}% "
-          f"W250:{stats['wind250_max_diff'][-1]:.1f}m/s")
+          f"W300:{stats['wind300_max_diff'][-1]:.1f}m/s")
 
 print()
 print("=" * 80)
@@ -446,18 +452,18 @@ axes[3].set_title('850 hPa RH Difference Evolution', fontweight='bold')
 axes[3].grid(True, alpha=0.3)
 axes[3].axhline(y=0, color='gray', linestyle='--', alpha=0.5)
 
-# 250 hPa Wind Speed
-axes[4].plot(stats['hours'], stats['wind250_max_diff'], 'orange', marker='o', linewidth=2, markersize=4)
+# 300 hPa Wind Speed
+axes[4].plot(stats['hours'], stats['wind300_max_diff'], 'orange', marker='o', linewidth=2, markersize=4)
 axes[4].set_xlabel('Forecast Hour', fontweight='bold')
-axes[4].set_ylabel('Max |ΔWind250| (m/s)', fontweight='bold')
-axes[4].set_title('250 hPa Wind Speed Difference Evolution', fontweight='bold')
+axes[4].set_ylabel('Max |ΔWind300| (m/s)', fontweight='bold')
+axes[4].set_title('300 hPa Wind Speed Difference Evolution', fontweight='bold')
 axes[4].grid(True, alpha=0.3)
 axes[4].axhline(y=0, color='gray', linestyle='--', alpha=0.5)
 
 # Remove unused subplot
 axes[5].axis('off')
 
-plt.suptitle('Atmospheric Field Differences: FTLE-Seeded Perturbed vs Baseline Forecast\nHurricane Sandy 2012',
+plt.suptitle('Atmospheric Field Differences: FTLE-Seeded Perturbed vs Baseline Forecast\nHurricane Ian 2022',
             fontsize=14, fontweight='bold')
 plt.tight_layout()
 plt.savefig(output_dir / 'field_differences_timeseries.png', dpi=150, bbox_inches='tight')
@@ -496,8 +502,7 @@ print(f"  WIND300: {max(stats['wind300_max_diff']):6.1f} m/s at +{stats['hours']
 print()
 print("Next steps:")
 print("  1. Examine individual timestep plots to see field evolution")
-print("  2. Look for Rossby wave patterns in Z500 difference fields")
+print("  2. Look for steering flow changes in Z500 difference fields")
 print("  3. Check if T700 warming persists or dissipates")
-print("  4. Identify when steering flow changes (Z500) correlate with track deviation")
-print("  5. Examine WIND300 to see if jet stream was perturbed (Weather Jiu-Jitsu?)")
+print("  4. Compare results with Sandy to identify common mechanisms")
 print()

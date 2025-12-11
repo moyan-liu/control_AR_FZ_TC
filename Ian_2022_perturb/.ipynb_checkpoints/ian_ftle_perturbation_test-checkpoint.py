@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 """
-Hurricane Sandy 2012 - FTLE-Guided Cloud Seeding Perturbation Test
+Hurricane Ian 2022 - FTLE-Guided Cloud Seeding Perturbation Test
 
-Adapts Moyan Liu's AR perturbation methodology to tropical cyclones.
-Tests whether FTLE-targeted cloud seeding can modify Sandy's track.
+Adapts Sandy's methodology to Hurricane Ian (Gulf of Mexico/Florida).
+Tests whether FTLE-targeted cloud seeding can modify Ian's track.
 
-Author: Adapted from Moyan Liu's perturbation_trail_111.ipynb
-Date: 2025-12-02
+Initialization: 7-day lead time (Sep 21, 2022 18:00 UTC)
+Target: Sep 28, 2022 landfall (Florida)
+
+Note: Uses Sep 22 18:00 UTC genesis position for tracker initialization
+      (Ian formed Sep 22 18:00 UTC, but initializes forecast Sep 21 18:00 UTC)
+
+Author: Adapted from sandy_ftle_perturbation_test.py
+Date: 2025-12-04
 """
 
 import sys
@@ -17,7 +23,7 @@ from datetime import datetime
 import xarray as xr
 
 # Add paths
-control_dir = Path(__file__).parent
+control_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(control_dir))
 research_dir = Path("/scratch/qhuang62/aurora-extreme-predictability/research")
 sys.path.insert(0, str(research_dir))
@@ -57,7 +63,7 @@ def plot_seeding_locations_map(seeding_locations, ftle_field, ftle_lats, ftle_lo
     """
     Create map showing FTLE field, seeding locations, and TC initial position.
 
-    Focused view on seeding region (0-30°N, 260-300°E).
+    Focused view on seeding region (Gulf of Mexico/Caribbean).
     """
     import matplotlib.pyplot as plt
     import cartopy.crs as ccrs
@@ -66,8 +72,8 @@ def plot_seeding_locations_map(seeding_locations, ftle_field, ftle_lats, ftle_lo
     fig = plt.figure(figsize=(16, 10))
     ax = plt.subplot(1, 1, 1, projection=ccrs.PlateCarree())
 
-    # Fixed extent for seeding region: 0-30°N, 260-300°E (100°W-60°W)
-    extent = [260, 300, 0, 30]
+    # Map extent: Caribbean/Gulf region (wider for 7-day lead)
+    extent = [260, 300, 10, 35]  # -100°W to -60°W, 10°N to 35°N
     ax.set_extent(extent, crs=ccrs.PlateCarree())
 
     # Map features
@@ -91,8 +97,7 @@ def plot_seeding_locations_map(seeding_locations, ftle_field, ftle_lats, ftle_lo
     cbar = plt.colorbar(ftle_plot, ax=ax, shrink=0.6, pad=0.02)
     cbar.set_label('FTLE (day⁻¹)', fontsize=11, fontweight='bold')
 
-    # Plot TC initial position only (no tracks)
-    # Convert longitude to °W for display
+    # Plot TC initial position
     tc_init_lon_W = 360 - tc_init_lon if tc_init_lon > 180 else -tc_init_lon
     ax.plot(tc_init_lon, tc_init_lat,
            'g*', markersize=25, markeredgecolor='black', markeredgewidth=2,
@@ -101,7 +106,6 @@ def plot_seeding_locations_map(seeding_locations, ftle_field, ftle_lats, ftle_lo
            zorder=10)
 
     # Plot seeding locations
-    # Build legend label with all coordinates (convert to °W for display)
     if len(seeding_locations) > 0:
         coord_text = '\n'.join([f"  {loc['lat_center']:.2f}°N, {360 - loc['lon_center']:.2f}°W"
                                 for loc in seeding_locations])
@@ -117,25 +121,19 @@ def plot_seeding_locations_map(seeding_locations, ftle_field, ftle_lats, ftle_lo
                label=legend_label if i == 1 else '',
                zorder=11)
 
-        # Seeding radius circle - use geodesic approximation
-        # Create circle points accounting for latitude-dependent longitude scale
+        # Seeding radius circle
         n_points = 100
         lat_center = loc['lat_center']
         lon_center = loc['lon_center']
         radius_km = loc['radius_km']
 
-        # Calculate radius in degrees (latitude)
         radius_lat = radius_km / 111.0
-
-        # Calculate radius in degrees (longitude) accounting for latitude
         radius_lon = radius_km / (111.0 * np.cos(np.deg2rad(lat_center)))
 
-        # Generate circle points
         theta = np.linspace(0, 2*np.pi, n_points)
         circle_lons = lon_center + radius_lon * np.cos(theta)
         circle_lats = lat_center + radius_lat * np.sin(theta)
 
-        # Plot circle as line
         ax.plot(circle_lons, circle_lats,
                color='black', linewidth=2, linestyle='--',
                transform=ccrs.PlateCarree(), zorder=10)
@@ -151,7 +149,7 @@ def plot_seeding_locations_map(seeding_locations, ftle_field, ftle_lats, ftle_lo
     ax.legend(loc='upper left', fontsize=10, framealpha=0.9)
 
     # Title
-    ax.set_title('Sandy 2012 - FTLE Field with Seeding Locations',
+    ax.set_title('Ian 2022 (7-day lead) - FTLE Field with Seeding Locations',
                 fontsize=13, fontweight='bold', pad=10)
 
     plt.tight_layout()
@@ -164,29 +162,12 @@ def plot_seeding_locations_map(seeding_locations, ftle_field, ftle_lats, ftle_lo
 def plot_custom_track_comparison(forecast_tracks, obs_track, tc_init_lat, tc_init_lon,
                                   title, save_path, extent=None, seeding_locations=None):
     """
-    Create custom track comparison plot with specific styling:
+    Create custom track comparison plot.
     - Observation (IBTrACS): blue line with round dots
     - Baseline Forecast: purple line with round dots
     - FTLE-Seeded Perturbed: red line with star markers
     - TC Initial Position: green star marker
     - Perturbation Sites: black/yellow small stars
-
-    Parameters
-    ----------
-    forecast_tracks : dict
-        {'Baseline Forecast': track_dict, 'FTLE-Seeded Perturbed': track_dict}
-    obs_track : dict
-        {'lat': [...], 'lon': [...], 'time': [...]}
-    tc_init_lat, tc_init_lon : float
-        Initial TC position
-    title : str
-        Plot title
-    save_path : Path
-        Save path for figure
-    extent : list, optional
-        [lon_min, lon_max, lat_min, lat_max]
-    seeding_locations : list, optional
-        List of seeding location dicts with 'lat_center' and 'lon_center'
     """
     import matplotlib.pyplot as plt
     import cartopy.crs as ccrs
@@ -205,14 +186,13 @@ def plot_custom_track_comparison(forecast_tracks, obs_track, tc_init_lat, tc_ini
     ax.add_feature(cfeature.LAND, facecolor='lightgray', alpha=0.3)
     ax.add_feature(cfeature.OCEAN, facecolor='lightblue', alpha=0.2)
 
-    # Gridlines with labels on bottom and left only
+    # Gridlines
     gl = ax.gridlines(draw_labels=True, dms=False, x_inline=False, y_inline=False,
                      linewidth=0.5, alpha=0.5)
     gl.top_labels = False
     gl.right_labels = False
 
     # Plot TC initial position (green star)
-    # Convert longitude to °W for display
     tc_init_lon_W = 360 - tc_init_lon if tc_init_lon > 180 else -tc_init_lon
     ax.plot(tc_init_lon, tc_init_lat,
            'g*', markersize=20, markeredgecolor='black', markeredgewidth=2,
@@ -228,10 +208,10 @@ def plot_custom_track_comparison(forecast_tracks, obs_track, tc_init_lat, tc_ini
                label='Observation (IBTrACS)',
                zorder=8)
 
-    # Plot forecast tracks with custom colors and markers (lighter palette)
+    # Plot forecast tracks
     track_styles = {
-        'Baseline Forecast': {'color': '#9B59B6', 'marker': 'o', 'markersize': 6, 'zorder': 6},  # Lighter purple
-        'FTLE-Seeded Perturbed': {'color': '#E74C3C', 'marker': '*', 'markersize': 10, 'zorder': 7}  # Lighter red
+        'Baseline Forecast': {'color': '#9B59B6', 'marker': 'o', 'markersize': 6, 'zorder': 6},
+        'FTLE-Seeded Perturbed': {'color': '#E74C3C', 'marker': '*', 'markersize': 10, 'zorder': 7}
     }
 
     for label, track in forecast_tracks.items():
@@ -243,7 +223,7 @@ def plot_custom_track_comparison(forecast_tracks, obs_track, tc_init_lat, tc_ini
                label=label,
                zorder=style['zorder'])
 
-    # Plot perturbation sites (small black/yellow stars)
+    # Plot perturbation sites
     if seeding_locations is not None and len(seeding_locations) > 0:
         for i, loc in enumerate(seeding_locations):
             ax.plot(loc['lon_center'], loc['lat_center'],
@@ -264,80 +244,12 @@ def plot_custom_track_comparison(forecast_tracks, obs_track, tc_init_lat, tc_ini
     return
 
 
-def plot_track_deviation(deviations, forecast_times, save_path):
-    """
-    Create track deviation timeseries plot for poster.
-
-    Parameters
-    ----------
-    deviations : list
-        Track deviations in km at each timestep
-    forecast_times : list
-        Datetime objects for each forecast timestep
-    save_path : Path
-        Output file path
-    """
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-
-    fig, ax = plt.subplots(figsize=(12, 7))
-
-    # Convert times to hours since initialization
-    hours = [(t - forecast_times[0]).total_seconds() / 3600 for t in forecast_times]
-
-    # Plot deviation
-    ax.plot(hours, deviations, 'o-', color='#E74C3C', linewidth=3,
-            markersize=8, markeredgecolor='black', markeredgewidth=1.5,
-            label='Track Deviation')
-
-    # Add horizontal grid
-    ax.grid(True, axis='y', alpha=0.3, linestyle='--')
-    ax.grid(True, axis='x', alpha=0.2, linestyle=':')
-
-    # Highlight key milestones
-    milestones = {
-        24: 4,   # 24 hours = 4 steps
-        48: 8,   # 48 hours = 8 steps
-        72: 12,  # 72 hours = 12 steps
-        120: 20, # 120 hours = 20 steps
-    }
-
-    for hour, step in milestones.items():
-        if step < len(deviations):
-            ax.axvline(hour, color='gray', linestyle='--', alpha=0.5, linewidth=1)
-            ax.text(hour, ax.get_ylim()[1] * 0.95, f'{hour}h',
-                   ha='center', va='top', fontsize=9, fontweight='bold',
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
-
-    # Labels and title
-    ax.set_xlabel('Forecast Lead Time (hours)', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Track Deviation (km)', fontsize=12, fontweight='bold')
-    ax.set_title('Hurricane Sandy - Track Deviation: Baseline vs FTLE-Seeded Perturbation',
-                fontsize=13, fontweight='bold', pad=15)
-
-    # Set x-axis limits and ticks
-    ax.set_xlim(0, max(hours))
-    ax.set_xticks(range(0, int(max(hours)) + 1, 24))
-
-    # Add legend with max deviation
-    max_dev = max(deviations)
-    max_dev_hour = hours[deviations.index(max_dev)]
-    legend_text = f'Track Deviation\n(Max: {max_dev:.1f} km at +{max_dev_hour:.0f}h)'
-    ax.legend([legend_text], loc='upper left', fontsize=11, framealpha=0.95)
-
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    plt.close()
-
-    return
-
-
 def main():
     print("=" * 80)
-    print("  Hurricane Sandy 2012 - FTLE-Guided Cloud Seeding Test")
+    print("  Hurricane Ian 2022 - FTLE-Guided Cloud Seeding Test (7-DAY LEAD)")
     print("=" * 80)
     print()
-    print("Strategy: Adapt Moyan Liu's AR perturbation method to TCs")
+    print("Strategy: Match Sandy's 7-day lead time for maximum propagation")
     print("Method: FTLE-targeted cloud seeding (heating + moisture removal)")
     print()
 
@@ -345,21 +257,21 @@ def main():
     # CONFIGURATION
     # =========================================================================
     CONFIG = {
-        'init_date': '2012-10-23',
-        'init_hour': '00',
-        'init_lat': 12.6,  # IBTrACS: Oct 23 00:00 UTC
-        'init_lon': 281.6,  # -78.4°W = 281.6°E
-        'steps': 28,  # 7 days to landfall (Oct 30)
-        'data_path': Path("/scratch/qhuang62/aurora-extreme-predictability/research/TC/data/era5_sandy_2012"),
-        'output_dir': Path("/scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output"),
+        'init_date': '2022-09-21',
+        'init_hour': '18',
+        'init_lat': 12.30,  # IBTrACS: Sep 22 18:00 UTC (genesis position)
+        'init_lon': 293.70,  # -66.30°W = 293.70°E
+        'steps': 27,  # 7 days (7*4 - 1 = 27 steps)
+        'data_path': Path("/scratch/qhuang62/aurora-extreme-predictability/research/TC/data/era5_ian_2022"),
+        'output_dir': Path("/scratch/qhuang62/control_AR_FZ_TC/Ian_2022_perturb/ian_ftle_test_output"),
     }
 
     CONFIG['output_dir'].mkdir(exist_ok=True, parents=True)
 
     # TC-adapted seeding configuration (environmental modification)
-    SEEDING_CONFIG_SANDY = {
+    SEEDING_CONFIG_IAN = {
         'layers_mb': [700.0, 500.0, 300.0],  # Steering levels
-        'freeze_efficiency': 0.6,            # Moderate for environment
+        'freeze_efficiency': 0.60,            # Moderate for environment
         'fallout_fraction': 0.80,             # High precipitation
         'max_removal_fraction': 0.50,         # Conservative moisture removal
         'energy_method': 'net_realistic',
@@ -367,18 +279,19 @@ def main():
         'coupling_factor': 0.3
     }
 
-    # Geographic bounds for FTLE analysis (near TC and forecast track)
-    # Focus on TC environment for seeding selection (500-1500 km range)
-    # Sandy Oct 23: 12.6°N, 281.6°E
-    # Extended to cover full visualization extent (0-30°N, 260-300°E for seeding map)
-    BOUNDS_SANDY = {
-        'lat': (0, 35),       # Full visualization extent to downstream
-        'lon': (260, 300)     # -100°W to -60°W (full map extent)
+    # Geographic bounds for FTLE analysis (Caribbean/Atlantic for 7-day lead)
+    BOUNDS_IAN = {
+        'lat': (10, 35),       # Caribbean/Gulf/Florida
+        'lon': (260, 300)      # -100°W to -60°W (wider for earlier init)
     }
 
     print(f"Initialization: {CONFIG['init_date']} {CONFIG['init_hour']}:00 UTC")
-    print(f"Sandy position: {CONFIG['init_lat']}°N, {CONFIG['init_lon']}°E")
-    print(f"Forecast length: {CONFIG['steps']} steps ({CONFIG['steps']*6} hours)")
+    print(f"Ian position (genesis): {CONFIG['init_lat']}°N, {CONFIG['init_lon']}°E")
+    print(f"Forecast length: {CONFIG['steps']} steps ({CONFIG['steps']*6} hours = {CONFIG['steps']/4:.1f} days)")
+    print()
+    print(f"Note: Ian formed Sep 22 18:00 UTC")
+    print(f"      Forecast initializes Sep 21 18:00 UTC (pre-genesis)")
+    print(f"      Using genesis position for tracker initialization")
     print()
 
     # =========================================================================
@@ -408,23 +321,34 @@ def main():
     # LOAD DATA
     # =========================================================================
     print("Loading ERA5 data...")
-    static_ds, surf_ds, atmos_ds = load_era5_data(
-        CONFIG['data_path'],
-        CONFIG['init_date']
-    )
 
-    # Convert longitude from [-180, 180] to [0, 360] if needed
+    # Check for combined files
+    surf_file = CONFIG['data_path'] / 'ian_2022_surface_combined.nc'
+    atmos_file = CONFIG['data_path'] / 'ian_2022_atmospheric_combined.nc'
+
+    if surf_file.exists() and atmos_file.exists():
+        print("Using combined ERA5 files...")
+        static_ds, _, _ = load_era5_data(CONFIG['data_path'], '2022-09-21')
+        surf_ds = xr.open_dataset(surf_file)
+        atmos_ds = xr.open_dataset(atmos_file)
+
+        # Use time_idx=3 for Sep 21 18:00 UTC (from ian_stage1_lead_day.py)
+        time_idx = 3
+    else:
+        print("Using single-day ERA5 files...")
+        static_ds, surf_ds, atmos_ds = load_era5_data(
+            CONFIG['data_path'],
+            CONFIG['init_date']
+        )
+        time_idx = 0
+
+    # Convert longitude if needed
     if surf_ds.longitude.values.min() < 0:
         print("Converting longitude from [-180, 180] to [0, 360]...")
-
-        # Convert longitude values
         lon_converted = (surf_ds.longitude.values + 360) % 360
-
-        # Sort by new longitude to maintain proper order
         lon_sort_idx = np.argsort(lon_converted)
         lon_sorted = lon_converted[lon_sort_idx]
 
-        # Reorder all datasets
         surf_ds = surf_ds.isel(longitude=lon_sort_idx).assign_coords(longitude=lon_sorted)
         atmos_ds = atmos_ds.isel(longitude=lon_sort_idx).assign_coords(longitude=lon_sorted)
         static_ds = static_ds.isel(longitude=lon_sort_idx).assign_coords(longitude=lon_sorted)
@@ -433,18 +357,12 @@ def main():
 
     # Filter to Aurora's standard 13 pressure levels
     AURORA_LEVELS = [50, 100, 150, 200, 250, 300, 400, 500, 600, 700, 850, 925, 1000]
-
     print(f"Filtering to Aurora's 13 standard pressure levels...")
-    print(f"  Original: {len(atmos_ds.pressure_level)} levels")
-
-    # Filter atmospheric dataset to only Aurora's 13 levels
     atmos_ds = atmos_ds.sel(pressure_level=AURORA_LEVELS)
-
-    print(f"  Filtered: {len(atmos_ds.pressure_level)} levels")
     print(f"✓ Using levels: {list(atmos_ds.pressure_level.values)}")
 
-    # Create batch (atmos_ds now only has the 13 Aurora levels)
-    batch = create_aurora_batch(static_ds, surf_ds, atmos_ds, time_start_idx=0)
+    # Create batch
+    batch = create_aurora_batch(static_ds, surf_ds, atmos_ds, time_start_idx=time_idx)
     print(f"✓ Batch created: {batch.atmos_vars['t'].shape}")
     print()
 
@@ -487,15 +405,15 @@ def main():
 
     print()
 
-    # Crop to Atlantic basin
+    # Crop to Gulf/Caribbean region
     ftle_crop, lats_crop, lons_crop = crop_region(
         ftle_field, lats, lons,
-        lat_range=(BOUNDS_SANDY['lat'][0], BOUNDS_SANDY['lat'][1]),
-        lon_range=(BOUNDS_SANDY['lon'][0], BOUNDS_SANDY['lon'][1])
+        lat_range=(BOUNDS_IAN['lat'][0], BOUNDS_IAN['lat'][1]),
+        lon_range=(BOUNDS_IAN['lon'][0], BOUNDS_IAN['lon'][1])
     )
 
-    print(f"✓ Cropped to Atlantic basin: {ftle_crop.shape}")
-    print(f"  FTLE range in basin: [{np.min(ftle_crop):.4f}, {np.max(ftle_crop):.4f}] day⁻¹")
+    print(f"✓ Cropped to Caribbean/Gulf: {ftle_crop.shape}")
+    print(f"  FTLE range in region: [{np.min(ftle_crop):.4f}, {np.max(ftle_crop):.4f}] day⁻¹")
     print()
 
     # =========================================================================
@@ -509,30 +427,29 @@ def main():
     # Select candidates
     selected_lats, selected_lons, selected_scores = select_seeding_candidates(
         ftle_crop, lats_crop, lons_crop,
-        ftle_percentile=85,  # Top 15% (slightly lower than AR to get more candidates)
-        geographic_bounds=BOUNDS_SANDY,
-        min_separation_km=300,  # Slightly smaller for TC environment
-        max_candidates=10  # Get more candidates, then filter by distance
+        ftle_percentile=85,  # Top 15%
+        geographic_bounds=BOUNDS_IAN,
+        min_separation_km=300,
+        max_candidates=10
     )
 
     if len(selected_lats) == 0:
         print("⚠️  No FTLE candidates found! Exiting...")
         return
 
-    # Filter candidates by distance from TC initial position
-    # Keep only locations within 500-1500 km of TC (environmental steering region)
+    # Filter by distance from TC (500-1500 km environmental steering region)
     from shared.metrics import calculate_distance
 
     filtered_lats = []
     filtered_lons = []
     filtered_scores = []
 
-    print(f"\nFiltering by distance from TC (12.6°N, 281.6°E):")
-    print(f"  Target range: 500-1500 km (environmental steering region)")
+    print(f"\nFiltering by distance from TC ({CONFIG['init_lat']}°N, {CONFIG['init_lon']}°E):")
+    print(f"  Target range: 100-2500 km (environmental steering region)")
 
     for lat, lon, score in zip(selected_lats, selected_lons, selected_scores):
         dist = calculate_distance(CONFIG['init_lat'], CONFIG['init_lon'], lat, lon)
-        if 500 <= dist <= 1500:
+        if 100 <= dist <= 2500:
             filtered_lats.append(lat)
             filtered_lons.append(lon)
             filtered_scores.append(score)
@@ -540,22 +457,22 @@ def main():
         else:
             print(f"    ✗ Skip: {lat:.2f}°N, {lon:.2f}°E (distance: {dist:.0f} km, outside range)")
 
-    # Update selected candidates
-    selected_lats = filtered_lats[:5]  # Keep top 5 after filtering
+    # Keep top candidates
+    selected_lats = filtered_lats[:5]
     selected_lons = filtered_lons[:5]
     selected_scores = filtered_scores[:5]
 
     if len(selected_lats) == 0:
-        print("\n⚠️  No candidates within 500-1500 km of TC! Exiting...")
+        print("\n⚠️  No candidates within 100-2500 km of TC! Exiting...")
         return
 
     print(f"\n✓ Selected {len(selected_lats)} locations within environmental steering region")
 
-    # Create seeding locations (use all candidates for maximum effect)
+    # Create seeding locations
     seeding_locations = create_seeding_locations_from_candidates(
         selected_lats, selected_lons,
         selected_indices=list(range(1, len(selected_lats)+1)),
-        radius_km=300  # TC environmental scale
+        radius_km=300
     )
 
     print_seeding_locations(seeding_locations)
@@ -597,7 +514,7 @@ def main():
     preds_baseline = run_forecast(
         model, batch_baseline, tracker_baseline,
         steps=CONFIG['steps'],
-        name="Sandy Baseline",
+        name="Ian Baseline",
         device=device,
         verbose=True
     )
@@ -610,7 +527,7 @@ def main():
     final_lon_baseline = forecast_track_baseline['lon'][-1]
     print(f"  Final position: {final_lat_baseline:.2f}°N, {final_lon_baseline:.2f}°E")
 
-    # Save predictions for field analysis
+    # Save predictions
     print("  Saving baseline predictions...")
     torch.save(preds_baseline, CONFIG['output_dir'] / 'preds_baseline.pt')
     print(f"  ✓ Saved: {CONFIG['output_dir'] / 'preds_baseline.pt'}")
@@ -624,18 +541,18 @@ def main():
     print("=" * 80)
     print()
 
-    # Clone batch for perturbation
+    # Clone batch
     batch_seeded = clone_batch(batch_baseline)
 
     # Apply cloud seeding
     delta_T, delta_q, diagnostics = apply_physically_consistent_cloud_seeding(
         batch_seeded,
         seeding_mask,
-        SEEDING_CONFIG_SANDY
+        SEEDING_CONFIG_IAN
     )
 
     # Print diagnostics
-    print_diagnostics(diagnostics, SEEDING_CONFIG_SANDY)
+    print_diagnostics(diagnostics, SEEDING_CONFIG_IAN)
 
     # =========================================================================
     # RUN PERTURBED FORECAST
@@ -655,7 +572,7 @@ def main():
     preds_seeded = run_forecast(
         model, batch_seeded, tracker_seeded,
         steps=CONFIG['steps'],
-        name="Sandy FTLE-Seeded",
+        name="Ian FTLE-Seeded",
         device=device,
         verbose=True
     )
@@ -668,7 +585,7 @@ def main():
     final_lon_seed = forecast_track_seeded['lon'][-1]
     print(f"  Final position: {final_lat_seed:.2f}°N, {final_lon_seed:.2f}°E")
 
-    # Save predictions for field analysis
+    # Save predictions
     print("  Saving seeded predictions...")
     torch.save(preds_seeded, CONFIG['output_dir'] / 'preds_seeded.pt')
     print(f"  ✓ Saved: {CONFIG['output_dir'] / 'preds_seeded.pt'}")
@@ -698,12 +615,19 @@ def main():
         deviations.append(dist)
 
     print("Track Deviations (Baseline vs FTLE-Seeded Perturbed):")
-    print(f"  24hr (+4 steps): {deviations[4]:.1f} km" if len(deviations) > 4 else "  24hr: N/A")
-    print(f"  48hr (+8 steps): {deviations[8]:.1f} km" if len(deviations) > 8 else "  48hr: N/A")
-    print(f"  72hr (+12 steps): {deviations[12]:.1f} km" if len(deviations) > 12 else "  72hr: N/A")
-    print(f"  96hr (+16 steps): {deviations[16]:.1f} km" if len(deviations) > 16 else "  96hr: N/A")
-    print(f"  120hr (+20 steps): {deviations[20]:.1f} km" if len(deviations) > 20 else "  120hr: N/A")
-    print(f"  Final: {deviations[-1]:.1f} km")
+    if len(deviations) > 4:
+        print(f"  24hr (+4 steps): {deviations[4]:.1f} km")
+    if len(deviations) > 8:
+        print(f"  48hr (+8 steps): {deviations[8]:.1f} km")
+    if len(deviations) > 12:
+        print(f"  72hr (+12 steps): {deviations[12]:.1f} km")
+    if len(deviations) > 16:
+        print(f"  96hr (+16 steps): {deviations[16]:.1f} km")
+    if len(deviations) > 20:
+        print(f"  120hr (+20 steps): {deviations[20]:.1f} km")
+    if len(deviations) > 24:
+        print(f"  144hr (+24 steps): {deviations[24]:.1f} km")
+    print(f"  Final ({len(deviations)-1} steps): {deviations[-1]:.1f} km")
     print()
 
     # Final position shift
@@ -724,10 +648,10 @@ def main():
 
     # Load observed track
     try:
-        obs_track = load_ibtracs_track('SANDY', 2012)
+        import pandas as pd
+        obs_track = load_ibtracs_track('IAN', 2022)
 
-        # Truncate to forecast period + 2 more timesteps (12 hours)
-        # 7 days + 12 hours = 7.5 days
+        # Truncate to forecast period (7 days)
         valid_indices = [i for i, t in enumerate(obs_track['time'])
                         if init_time <= t <= init_time + pd.Timedelta(days=7, hours=12)]
         obs_track_truncated = {
@@ -745,21 +669,20 @@ def main():
         'FTLE-Seeded Perturbed': forecast_track_seeded
     }
 
-    # Track comparison plot with custom styling (extent 0-50°N, 260-300°E)
-    track_plot = CONFIG['output_dir'] / "sandy_ftle_track_comparison.png"
+    track_plot = CONFIG['output_dir'] / "ian_ftle_track_comparison.png"
     plot_custom_track_comparison(
         forecast_tracks=forecast_tracks,
         obs_track=obs_track_truncated,
         tc_init_lat=CONFIG['init_lat'],
         tc_init_lon=CONFIG['init_lon'],
-        title="Sandy 2012 - FTLE-Guided Perturbation Test Result",
+        title="Ian 2022 - FTLE-Guided Perturbation Test (7-Day Lead)",
         save_path=track_plot,
-        extent=[260, 300, 0, 50],  # 0-50°N, 260-300°E (100°W-60°W)
+        extent=[260, 300, 10, 35],  # Caribbean/Gulf/Florida region (wider for 7-day)
         seeding_locations=seeding_locations
     )
     print(f"✓ Saved track comparison: {track_plot}")
 
-    # Create seeding location map
+    # Seeding location map
     print("\nCreating seeding location visualization...")
     try:
         plot_seeding_locations_map(
@@ -775,18 +698,6 @@ def main():
     except Exception as e:
         print(f"⚠️  Could not create seeding map: {e}")
 
-    # Create track deviation plot
-    print("\nCreating track deviation plot...")
-    try:
-        plot_track_deviation(
-            deviations=deviations,
-            forecast_times=[init_time + pd.Timedelta(hours=i*6) for i in range(len(deviations))],
-            save_path=CONFIG['output_dir'] / "track_deviation_timeseries.png"
-        )
-        print(f"✓ Saved deviation plot: {CONFIG['output_dir'] / 'track_deviation_timeseries.png'}")
-    except Exception as e:
-        print(f"⚠️  Could not create deviation plot: {e}")
-
     # =========================================================================
     # SUMMARY
     # =========================================================================
@@ -795,19 +706,33 @@ def main():
     print("=" * 80)
     print()
     print("Summary:")
+    print(f"  • Lead time: 7 days (168 hours) - matches Sandy")
     print(f"  • FTLE candidates: {len(seeding_locations)}")
     print(f"  • Seeded area: {seeding_mask.sum()} grid cells")
     print(f"  • Max track deviation: {max(deviations):.1f} km")
     print(f"  • Final track deviation: {deviations[-1]:.1f} km")
     print()
+
+    if deviations[-1] > 100:
+        print("✓ SUCCESS: Significant track deviation achieved!")
+        print("  7-day lead time allowed perturbation effects to propagate.")
+        print("  Compare with Sandy's 321.6 km deviation!")
+    elif deviations[-1] > 50:
+        print("✓ MODERATE SUCCESS: Noticeable track deviation")
+        print("  Consider testing different perturbation sites or parameters.")
+    else:
+        print("⚠️  LIMITED SUCCESS: Small track deviation")
+        print("  May need to adjust:")
+        print("    - Perturbation site selection (try 300-800 km from TC)")
+        print("    - FTLE percentile threshold (try 75% or 80%)")
+        print("    - Seeding radius (try 200 km or 400 km)")
+    print()
     print("Next steps:")
-    print("  1. Analyze physical mechanisms (inspect wind/pressure fields)")
-    print("  2. Test different FTLE thresholds and seeding radii")
-    print("  3. Compare with your previous grid-based method")
-    print("  4. Extend to other TCs if successful")
+    print("  1. Run analyze_ian_perturbation_fields.py to analyze physical mechanisms")
+    print("  2. Compare with Sandy results (321.6 km deviation)")
+    print("  3. Test Hinnamnor and Amphan with 7-day lead if successful")
     print()
 
 
 if __name__ == "__main__":
-    import pandas as pd  # Import needed for time truncation
     main()

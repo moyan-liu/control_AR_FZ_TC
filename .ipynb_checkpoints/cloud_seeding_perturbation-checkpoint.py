@@ -199,45 +199,22 @@ def apply_physically_consistent_cloud_seeding(batch, seeding_mask_spatial, seedi
         # Water vapor deposits directly onto ice nuclei (vapor → ice)
         freeze_efficiency = seeding_params.get('freeze_efficiency', 0.30)
         max_removal_fraction = seeding_params.get('max_removal_fraction', 0.80)
-        min_RH = seeding_params.get('min_RH', 0.75)  # Only seed where RH > 75%
 
-        # Combined mask: spatial AND moisture availability
-        # Only apply seeding where both conditions met:
-        # 1. Inside spatial seeding mask
-        # 2. RH > min_RH (typically 75%)
-        active_mask = ((mask_torch > 0) & (RH_old > min_RH)).float()
-
-        # Calculate potential freezing (only in active regions)
-        q_frozen_potential = q_old * freeze_efficiency * active_mask
+        # Calculate potential freezing
+        q_frozen_potential = q_old * freeze_efficiency * mask_torch
 
         # Limit to preserve physical moisture levels
         q_frozen = torch.minimum(q_frozen_potential, q_old * max_removal_fraction)
 
-        # Track seeding statistics
-        seeded_region = active_mask > 0  # Boolean mask for active seeding
-
-        # Report RH filtering effectiveness
-        if level_idx == layer_indices[0]:
-            total_spatial_cells = (mask_torch > 0).sum().item()
-            active_seeded_cells = seeded_region.sum().item()
-            if total_spatial_cells > 0:
-                pct_active = (active_seeded_cells / total_spatial_cells * 100)
-                if pct_active < 100:
-                    diagnostics['warnings'].append(
-                        f"ℹ️  RH filter: {pct_active:.1f}% of spatial mask has RH > {min_RH*100:.0f}% "
-                        f"({active_seeded_cells}/{int(total_spatial_cells)} cells seeded)"
-                    )
-
-        # Track where moisture limitation applied (only in active seeded region)
-        if seeded_region.any():
-            moisture_limited = (q_frozen[seeded_region] < q_frozen_potential[seeded_region]).any()
-            if moisture_limited and level_idx == layer_indices[0]:
-                pct_limited = ((q_frozen[seeded_region] < q_frozen_potential[seeded_region]).sum() /
-                               seeded_region.sum() * 100).item()
-                diagnostics['warnings'].append(
-                    f"ℹ️  {pct_limited:.1f}% of seeded cells were moisture-limited "
-                    f"(too dry for full {freeze_efficiency*100:.0f}% efficiency)"
-                )
+        # Track where moisture limitation applied
+        moisture_limited = (q_frozen < q_frozen_potential).any()
+        if moisture_limited and level_idx == layer_indices[0]:
+            pct_limited = ((q_frozen < q_frozen_potential).sum() /
+                           (mask_torch > 0).sum() * 100).item()
+            diagnostics['warnings'].append(
+                f"ℹ️  {pct_limited:.1f}% of seeded cells were moisture-limited "
+                f"(too dry for full {freeze_efficiency*100:.0f}% efficiency)"
+            )
 
         # ========== LATENT HEAT RELEASE ==========
         # CRITICAL: Vapor → ice is DEPOSITION, not freezing!
@@ -302,26 +279,15 @@ def apply_physically_consistent_cloud_seeding(batch, seeding_mask_spatial, seedi
         delta_q_applied[level_idx] = -q_removed
 
         # ========== STORE DIAGNOSTICS ==========
+        seeded_region = mask_torch > 0
         diagnostics['levels'].append(P_hPa)
-
-        # Store diagnostics only for actually seeded region (active_mask)
-        if seeded_region.any():
-            diagnostics['RH_before'].append(RH_old[seeded_region].mean().item())
-            diagnostics['RH_after'].append(RH_new[seeded_region].mean().item())
-            diagnostics['q_frozen_mean'].append(q_frozen[seeded_region].mean().item())
-            diagnostics['q_removed_mean'].append(q_removed[seeded_region].mean().item())
-            diagnostics['delta_T_mean'].append(delta_T[seeded_region].mean().item())
-            diagnostics['q_precipitated_mean'].append(q_precip[seeded_region].mean().item())
-            diagnostics['energy_released_mean'].append(delta_E[seeded_region].mean().item())
-        else:
-            # No cells met RH threshold at this level
-            diagnostics['RH_before'].append(float('nan'))
-            diagnostics['RH_after'].append(float('nan'))
-            diagnostics['q_frozen_mean'].append(0.0)
-            diagnostics['q_removed_mean'].append(0.0)
-            diagnostics['delta_T_mean'].append(0.0)
-            diagnostics['q_precipitated_mean'].append(0.0)
-            diagnostics['energy_released_mean'].append(0.0)
+        diagnostics['RH_before'].append(RH_old[seeded_region].mean().item())
+        diagnostics['RH_after'].append(RH_new[seeded_region].mean().item())
+        diagnostics['q_frozen_mean'].append(q_frozen[seeded_region].mean().item())
+        diagnostics['q_removed_mean'].append(q_removed[seeded_region].mean().item())
+        diagnostics['delta_T_mean'].append(delta_T[seeded_region].mean().item())
+        diagnostics['q_precipitated_mean'].append(q_precip[seeded_region].mean().item())
+        diagnostics['energy_released_mean'].append(delta_E[seeded_region].mean().item())
 
         # ========== VERTICAL COUPLING ==========
         if seeding_params.get('vertical_coupling', False):

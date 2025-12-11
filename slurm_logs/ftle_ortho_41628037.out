@@ -1,0 +1,66 @@
+========================================
+Starting FTLE Orthographic Projection
+Job ID: 41628037
+Node: sc008
+Started at: Fri Dec  5 17:50:28 MST 2025
+========================================
+
+Running FTLE calculation (global Northern Hemisphere)...
+================================================================================
+  FTLE Orthographic Projection - Visualization Only
+================================================================================
+
+Loading ERA5 data for 2012-10-23...
+✓ Grid: 721 lats × 1440 lons
+
+Calculating FTLE at 500 hPa (GLOBAL DOMAIN)...
+🌀 Calculating forward FTLE...
+   Integration time: 48 hours
+   Time step: 6 hours
+   Step 1/2: Advecting particles...
+   Step 2/2: Computing FTLE field...
+✅ FTLE calculation complete
+   FTLE range: [-4.9829, 3.6479] day⁻¹
+✓ Global FTLE range: [-4.9829, 3.6479] day⁻¹
+
+Cropping Atlantic region for site selection...
+✓ Atlantic FTLE range: [-3.4403, -0.7110] day⁻¹
+
+Selecting seeding locations (from Atlantic region)...
+🔍 Finding optimal seeding points...
+  FTLE threshold (85th percentile): -1.5053
+  Skipping jet stream filtering (not provided)
+  Geographic bounds: lat [0, 35], lon [260, 300]
+
+  Found 3406 candidate points after filtering
+  Composite score range: 0.000 to 1.000
+
+  Filtering by minimum separation: 300 km...
+
+✅ Selected 10 candidates with min separation 300 km
+  Latitude range: 5.50° to 33.25°
+  Longitude range: 260.00° to 300.00°
+✓ Selected 3 seeding locations
+  Site 1: 5.50°N, 277.75°E
+  Site 2: 8.25°N, 278.50°E
+  Site 3: 14.25°N, 269.00°E
+
+================================================================================
+🗺️  Plotting FTLE Map with 3D Orthographic Projection (SPHERE)
+================================================================================
+  Plotting FTLE field...
+  Adding map features...
+  Plotting TC initial position...
+  Plotting seeding points...
+  Plotting TC distance region...
+
+================================================================================
+✅ Visualization Complete!
+================================================================================
+
+📁 Saved: /scratch/qhuang62/control_AR_FZ_TC/sandy_ftle_test_output/seeding_locations_map_orthographic.png
+================================================================================
+
+========================================
+Job completed at: Fri Dec  5 17:58:22 MST 2025
+========================================

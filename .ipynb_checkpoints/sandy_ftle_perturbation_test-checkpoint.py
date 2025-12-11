@@ -264,74 +264,6 @@ def plot_custom_track_comparison(forecast_tracks, obs_track, tc_init_lat, tc_ini
     return
 
 
-def plot_track_deviation(deviations, forecast_times, save_path):
-    """
-    Create track deviation timeseries plot for poster.
-
-    Parameters
-    ----------
-    deviations : list
-        Track deviations in km at each timestep
-    forecast_times : list
-        Datetime objects for each forecast timestep
-    save_path : Path
-        Output file path
-    """
-    import matplotlib.pyplot as plt
-    import matplotlib.dates as mdates
-
-    fig, ax = plt.subplots(figsize=(12, 7))
-
-    # Convert times to hours since initialization
-    hours = [(t - forecast_times[0]).total_seconds() / 3600 for t in forecast_times]
-
-    # Plot deviation
-    ax.plot(hours, deviations, 'o-', color='#E74C3C', linewidth=3,
-            markersize=8, markeredgecolor='black', markeredgewidth=1.5,
-            label='Track Deviation')
-
-    # Add horizontal grid
-    ax.grid(True, axis='y', alpha=0.3, linestyle='--')
-    ax.grid(True, axis='x', alpha=0.2, linestyle=':')
-
-    # Highlight key milestones
-    milestones = {
-        24: 4,   # 24 hours = 4 steps
-        48: 8,   # 48 hours = 8 steps
-        72: 12,  # 72 hours = 12 steps
-        120: 20, # 120 hours = 20 steps
-    }
-
-    for hour, step in milestones.items():
-        if step < len(deviations):
-            ax.axvline(hour, color='gray', linestyle='--', alpha=0.5, linewidth=1)
-            ax.text(hour, ax.get_ylim()[1] * 0.95, f'{hour}h',
-                   ha='center', va='top', fontsize=9, fontweight='bold',
-                   bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
-
-    # Labels and title
-    ax.set_xlabel('Forecast Lead Time (hours)', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Track Deviation (km)', fontsize=12, fontweight='bold')
-    ax.set_title('Hurricane Sandy - Track Deviation: Baseline vs FTLE-Seeded Perturbation',
-                fontsize=13, fontweight='bold', pad=15)
-
-    # Set x-axis limits and ticks
-    ax.set_xlim(0, max(hours))
-    ax.set_xticks(range(0, int(max(hours)) + 1, 24))
-
-    # Add legend with max deviation
-    max_dev = max(deviations)
-    max_dev_hour = hours[deviations.index(max_dev)]
-    legend_text = f'Track Deviation\n(Max: {max_dev:.1f} km at +{max_dev_hour:.0f}h)'
-    ax.legend([legend_text], loc='upper left', fontsize=11, framealpha=0.95)
-
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=150, bbox_inches='tight')
-    plt.close()
-
-    return
-
-
 def main():
     print("=" * 80)
     print("  Hurricane Sandy 2012 - FTLE-Guided Cloud Seeding Test")
@@ -774,18 +706,6 @@ def main():
         print(f"✓ Saved seeding map: {CONFIG['output_dir'] / 'seeding_locations_map.png'}")
     except Exception as e:
         print(f"⚠️  Could not create seeding map: {e}")
-
-    # Create track deviation plot
-    print("\nCreating track deviation plot...")
-    try:
-        plot_track_deviation(
-            deviations=deviations,
-            forecast_times=[init_time + pd.Timedelta(hours=i*6) for i in range(len(deviations))],
-            save_path=CONFIG['output_dir'] / "track_deviation_timeseries.png"
-        )
-        print(f"✓ Saved deviation plot: {CONFIG['output_dir'] / 'track_deviation_timeseries.png'}")
-    except Exception as e:
-        print(f"⚠️  Could not create deviation plot: {e}")
 
     # =========================================================================
     # SUMMARY

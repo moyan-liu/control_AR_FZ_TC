@@ -1,0 +1,27 @@
+✓ Keep: 12.25°N, 278.75°E (distance: 1181 km)
+
+Creating targeted cluster around: 20.00°N, 285.00°E
+  Cluster radius: 400 km
+  Number of sites: 5
+
+  Found 569 candidate points in cluster
+    Site 1: 19.00°N, 287.25°E (TC: 540 km, Center: 261 km)
+    Site 2: 20.50°N, 283.25°E (TC: 925 km, Center: 191 km)
+    Site 3: 19.75°N, 282.00°E (TC: 972 km, Center: 315 km)
+    Site 4: 19.00°N, 283.50°E (TC: 796 km, Center: 193 km)
+    Site 5: 19.50°N, 288.75°E (TC: 549 km, Center: 396 km)
+
+
+✅ Created 5 seeding locations:
+  1. Lat:  19.00°, Lon: 287.25°, Radius: 200 km
+  2. Lat:  20.50°, Lon: 283.25°, Radius: 200 km
+  3. Lat:  19.75°, Lon: 282.00°, Radius: 200 km
+  4. Lat:  19.00°, Lon: 283.50°, Radius: 200 km
+  5. Lat:  19.50°, Lon: 288.75°, Radius: 200 km
+
+
+so in the scratch/qhuang62/control_AR_FZ_TC/Ian_2022_perturb/ian_ftle_perturbation_test_targeted.py its not using the actual site 2 location as target center 12.25°N, 278.75°E but use 20.00°N, 285.00°E?  
+
+update the targeted method on scratch/qhuang62/control_AR_FZ_TC/Ian_2022_perturb/ian_ftle_perturbation_test_5day.py to use the 12.25°N, 278.75°E please. 
+
+make gif script from scratch/qhuang62/control_AR_FZ_TC/create_field_gifs.py for current clustered for scratch/qhuang62/control_AR_FZ_TC/Ian_2022_perturb/ian_ftle_test_output_targeted/field_analysis field variable pngs to make gif for each variable.
